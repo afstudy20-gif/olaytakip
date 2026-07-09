@@ -1,9 +1,10 @@
 """Analysis endpoints for Olay Takip."""
+import io
 import json
 from typing import Literal, Optional
 
 import pandas as pd
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel
 
 from services import store
@@ -64,6 +65,47 @@ async def zreport(
         raise HTTPException(status_code=404, detail="Session not found")
     df = _apply_filters(df, filters)
     return {"granularity": granularity, "rows": compute_z_report(df, granularity=granularity)}
+
+
+@router.get("/zreport/export")
+async def zreport_export(
+    session_id: str = Query(...),
+    granularity: Literal["daily", "weekly", "monthly", "quarterly", "half_yearly", "yearly"] = Query("monthly"),
+    filters: Optional[str] = Query(None),
+    fmt: str = Query("xlsx", pattern="^(csv|xlsx)$"),
+    columns: Optional[str] = Query(None),
+):
+    df = store.get(session_id)
+    if df is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    df = _apply_filters(df, filters)
+    rows = compute_z_report(df, granularity=granularity)
+    if not rows:
+        raise HTTPException(status_code=404, detail="No Z report data to export")
+    out_df = pd.DataFrame(rows)
+    if columns:
+        selected = [c.strip() for c in columns.split(",") if c.strip() in out_df.columns]
+        if selected:
+            out_df = out_df[selected]
+    base = f"zreport_{granularity}"
+    if fmt == "csv":
+        buf = io.StringIO()
+        out_df.to_csv(buf, index=False)
+        content = buf.getvalue().encode("utf-8-sig")
+        return Response(
+            content=content,
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="{base}.csv"'},
+        )
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+        out_df.to_excel(writer, index=False, sheet_name="ZReport")
+    buf.seek(0)
+    return Response(
+        content=buf.read(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{base}.xlsx"'},
+    )
 
 
 @router.get("/charts")

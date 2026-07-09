@@ -117,6 +117,24 @@ export function exportDatasetUrl(sessionId: string, fmt: 'csv' | 'xlsx', filenam
   return `/api/sessions/${sessionId}/export?fmt=${fmt}&filename=${encodeURIComponent(filename)}`
 }
 
+export function exportZReportUrl(
+  sessionId: string,
+  granularity: string,
+  fmt: 'csv' | 'xlsx',
+  columns: string[],
+  filters?: Record<string, string>
+) {
+  const params = new URLSearchParams()
+  params.set('fmt', fmt)
+  if (columns.length > 0) {
+    params.set('columns', columns.join(','))
+  }
+  if (filters && Object.keys(filters).length > 0) {
+    params.set('filters', JSON.stringify(filters))
+  }
+  return `/api/analiz/zreport/export?session_id=${sessionId}&granularity=${granularity}&${params.toString()}`
+}
+
 export function saveSessionUrl(sessionId: string) {
   return `/api/sessions/${sessionId}/save_session`
 }
