@@ -1,5 +1,5 @@
 import { useStore } from './store'
-import useAutoSession from './hooks/useAutoSession'
+import useAutoSession, { saveSessionSnapshot } from './hooks/useAutoSession'
 import UploadZone from './components/UploadZone'
 import DataTable from './components/DataTable'
 import OlaySummaryPanel from './components/OlaySummaryPanel'
@@ -20,6 +20,25 @@ function App() {
   useAutoSession()
 
   const { session, activeTab, setActiveTab, error } = useStore()
+
+  const returnHome = async () => {
+    const state = useStore.getState()
+    if (state.session) {
+      try {
+        await saveSessionSnapshot({
+          sessionId: state.session.session_id,
+          filename: state.session.filename,
+          nRows: state.session.rows,
+          nCols: state.session.columns.length,
+          activeTab: state.activeTab,
+        })
+        await state.refreshRecentSessions()
+      } catch (e) {
+        console.warn('[App] save before return home failed', e)
+      }
+    }
+    useStore.getState().setSession(null)
+  }
 
   if (!session) {
     return (
@@ -42,7 +61,7 @@ function App() {
       <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
         <button
           type="button"
-          onClick={() => useStore.getState().setSession(null)}
+          onClick={() => { void returnHome() }}
           className="text-left"
         >
           <h1 className="text-xl font-bold text-indigo-700">Olay Takip</h1>
@@ -52,7 +71,7 @@ function App() {
           <CloudSyncBar />
           <button
             type="button"
-            onClick={() => useStore.getState().setSession(null)}
+            onClick={() => { void returnHome() }}
             className="text-sm text-slate-600 hover:text-indigo-700"
           >
             Yeni yükle

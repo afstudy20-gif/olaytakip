@@ -10,10 +10,38 @@ import { cloudSync } from "../lib/cloudSync";
 const DEBOUNCE_MS = 5_000;
 const PERIODIC_MS = 60_000;
 
+interface SessionSnapshotInput {
+  sessionId: string;
+  filename: string;
+  nRows?: number;
+  nCols?: number;
+  activeTab?: string;
+  source?: "auto" | "manual";
+}
+
 function djb2(s: string): string {
   let h = 5381;
   for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
   return `${s.length}:${h >>> 0}`;
+}
+
+async function persistSessionPayload(input: SessionSnapshotInput & { payload: string }) {
+  await upsertRecentSession({
+    serverSessionId: input.sessionId,
+    name: input.filename,
+    payload: input.payload,
+    nRows: input.nRows,
+    nCols: input.nCols,
+    activeTab: input.activeTab,
+    source: input.source ?? "auto",
+  });
+  cloudSync.markDirty();
+}
+
+export async function saveSessionSnapshot(input: SessionSnapshotInput): Promise<void> {
+  const blob = await api.saveSession(input.sessionId);
+  const payload = await blob.text();
+  await persistSessionPayload({ ...input, payload });
 }
 
 /**
@@ -67,16 +95,14 @@ export function useAutoSession() {
         const hash = djb2(`${sessionId}\n${filename ?? ""}\n${activeTab}\n${payload}`);
         if (hash === lastSavedHashRef.current) return;
         lastSavedHashRef.current = hash;
-        await upsertRecentSession({
-          serverSessionId: sessionId,
-          name: filename ?? "Oturum",
+        await persistSessionPayload({
+          sessionId,
+          filename: filename ?? "Oturum",
           payload,
           nRows: nRows ?? undefined,
           nCols: nCols ?? undefined,
           activeTab,
-          source: "auto",
         });
-        cloudSync.markDirty();
         await refreshRecentSessions();
       } catch (e) {
         console.warn("[useAutoSession] snapshot failed", e);

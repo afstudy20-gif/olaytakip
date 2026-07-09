@@ -4,6 +4,7 @@ import { uploadFile, createBlankSession } from '../api'
 import { useStore } from '../store'
 import RecentSessions from './RecentSessions'
 import CloudSyncStrip from './CloudSyncStrip'
+import { saveSessionSnapshot } from '../hooks/useAutoSession'
 
 export default function UploadZone() {
   const [drag, setDrag] = useState(false)
@@ -20,6 +21,15 @@ export default function UploadZone() {
     try {
       const session = await uploadFile(file)
       setSession(session)
+      void saveSessionSnapshot({
+        sessionId: session.session_id,
+        filename: session.filename,
+        nRows: session.rows,
+        nCols: session.columns.length,
+        activeTab: 'data',
+      })
+        .then(refreshRecentSessions)
+        .catch((e) => console.warn('[UploadZone] initial snapshot failed', e))
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Yükleme başarısız')
     } finally {
@@ -45,6 +55,15 @@ export default function UploadZone() {
     try {
       const session = await createBlankSession()
       setSession(session)
+      void saveSessionSnapshot({
+        sessionId: session.session_id,
+        filename: session.filename,
+        nRows: session.rows,
+        nCols: session.columns.length,
+        activeTab: 'data',
+      })
+        .then(refreshRecentSessions)
+        .catch((e) => console.warn('[UploadZone] initial snapshot failed', e))
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Oturum oluşturulamadı')
     } finally {

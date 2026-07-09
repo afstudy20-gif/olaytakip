@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { useStore } from '../store'
-import useAutoSession from './useAutoSession'
+import useAutoSession, { saveSessionSnapshot } from './useAutoSession'
 import * as api from '../api'
 import type { Session } from '../types'
+import { listRecentSessions } from '../lib/sessionDb'
 
 const markDirty = vi.fn()
 
@@ -98,5 +99,19 @@ describe('useAutoSession', () => {
     await waitFor(() => {
       expect(api.saveSession).toHaveBeenCalledTimes(2)
     })
+  })
+
+  it('saves a snapshot immediately without waiting for debounce', async () => {
+    await saveSessionSnapshot({
+      sessionId: 'sess-immediate',
+      filename: 'immediate.csv',
+      nRows: 2,
+      nCols: 1,
+      activeTab: 'data',
+    })
+
+    const sessions = await listRecentSessions()
+    expect(sessions.some((session) => session.name === 'immediate.csv')).toBe(true)
+    expect(api.saveSession).toHaveBeenCalledTimes(1)
   })
 })
