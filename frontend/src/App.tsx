@@ -40,10 +40,14 @@ function App() {
   return (
     <div className="min-h-screen flex flex-col">
       <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
-        <div>
+        <button
+          type="button"
+          onClick={() => useStore.getState().setSession(null)}
+          className="text-left"
+        >
           <h1 className="text-xl font-bold text-indigo-700">Olay Takip</h1>
           <p className="text-sm text-slate-500">{session.filename} • {session.rows} kayıt</p>
-        </div>
+        </button>
         <div className="flex items-center gap-3">
           <CloudSyncBar />
           <button
@@ -73,12 +77,12 @@ function App() {
           ))}
         </div>
       </nav>
-      <main className="flex-1 overflow-hidden">
+      <main className="flex flex-1 flex-col overflow-hidden">
         {error && <p className="p-6 text-red-600">{error}</p>}
         {activeTab === 'data' ? (
           <DataTable />
         ) : (
-          <div className="h-full overflow-auto p-6">
+          <div className="flex-1 overflow-auto p-6">
             <div className="rounded-lg border border-slate-200 bg-white p-6">
               {activeTab === 'summary' && <OlaySummaryPanel />}
               {activeTab === 'zreport' && <ZReportPanel />}

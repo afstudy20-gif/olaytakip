@@ -208,6 +208,7 @@ export async function getTrashedSession(id: string): Promise<RecentSessionRecord
  *  TRASH_TTL_MS; after that purgeExpiredTrash() removes it permanently. */
 export async function trashSession(id: string): Promise<void> {
   await getDb().sessions.update(id, { deletedAt: Date.now() });
+  notifySessionsChanged();
 }
 
 /** Restore a trashed record back to active. Resets savedAt to now so the
@@ -215,12 +216,14 @@ export async function trashSession(id: string): Promise<void> {
  *  as active (tombstone cleared). */
 export async function restoreSession(id: string): Promise<void> {
   await getDb().sessions.update(id, { deletedAt: null, savedAt: Date.now() });
+  notifySessionsChanged();
 }
 
 /** Permanently delete a single record from IndexedDB (hard delete). Used
  *  by "Kalıcı Sil" in the Trash bin and by purgeExpiredTrash(). */
 export async function purgeSession(id: string): Promise<void> {
   await getDb().sessions.delete(id);
+  notifySessionsChanged();
 }
 
 /** Permanently delete ALL trashed records. */
@@ -231,6 +234,7 @@ export async function emptyTrash(): Promise<void> {
     .above(0)
     .primaryKeys();
   await db.sessions.bulkDelete(ids);
+  notifySessionsChanged();
 }
 
 /**
@@ -263,12 +267,14 @@ export async function clearAllRecentSessions(): Promise<void> {
     .filter((r) => !r.deletedAt)
     .primaryKeys();
   await db.sessions.bulkDelete(ids);
+  notifySessionsChanged();
 }
 
 /** Permanently delete a single ACTIVE record (legacy hard-delete). Kept for
  *  any callers that still want immediate removal rather than trash. */
 export async function deleteRecentSession(id: string): Promise<void> {
   await getDb().sessions.delete(id);
+  notifySessionsChanged();
 }
 
 /** Upsert a session blob, deduping so the same logical file occupies a
@@ -316,6 +322,7 @@ export async function upsertRecentSession(input: {
   };
   await db.sessions.put(rec);
   await pruneToCap();
+  notifySessionsChanged();
   const { payload: _ignored, ...meta } = rec;
   void _ignored;
   return meta;
@@ -363,6 +370,7 @@ export async function upsertRecentSessionRaw(input: {
   };
   await db.sessions.put(rec);
   await pruneToCap();
+  notifySessionsChanged();
   const { payload: _ignored, ...meta } = rec;
   void _ignored;
   return meta;

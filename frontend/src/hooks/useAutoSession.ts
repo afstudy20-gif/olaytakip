@@ -7,24 +7,39 @@ import {
 } from "../lib/sessionDb";
 import { cloudSync } from "../lib/cloudSync";
 
+const DEBOUNCE_MS = 5_000;
+const PERIODIC_MS = 60_000;
+
+function djb2(s: string): string {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  return `${s.length}:${h >>> 0}`;
+}
+
 /**
  * useAutoSession — debounced local autosave + cloud-sync dirty marker.
  *
- * Watches the current Zustand session. When it changes and is non-null,
- * waits 500 ms of quiescence, then:
+ * Watches the current Zustand session. When tracked state changes and is non-null,
+ * waits 5 s of quiescence, then:
  *   1. Fetches the server-side JSON snapshot via api.saveSession().
  *   2. Stores it in IndexedDB via upsertRecentSession().
  *   3. Marks cloud sync dirty so Drive gets the new snapshot.
  *
- * Pending snapshots are flushed immediately on unmount or page close.
+ * A periodic 60 s snapshot catches server-side edits that do not flow through
+ * local React state. Page close gets one last best-effort flush.
  */
 export function useAutoSession() {
-  const session = useStore((s) => s.session);
+  const sessionId = useStore((s) => s.session?.session_id ?? null);
+  const filename = useStore((s) => s.session?.filename ?? null);
+  const nRows = useStore((s) => s.session?.rows ?? null);
+  const nCols = useStore((s) => s.session?.columns.length ?? null);
   const activeTab = useStore((s) => s.activeTab);
+  const filters = useStore((s) => s.filters);
+  const dataVersion = useStore((s) => s.dataVersion);
   const refreshRecentSessions = useStore((s) => s.refreshRecentSessions);
 
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingRef = useRef<Promise<void> | null>(null);
+  const lastSavedHashRef = useRef<string | null>(null);
+  const inFlightRef = useRef(false);
 
   // Subscribe to cross-tab session changes and refresh the recent list.
   useEffect(() => {
@@ -37,85 +52,53 @@ export function useAutoSession() {
     };
   }, [refreshRecentSessions]);
 
-  const snapshot = async (targetSession: NonNullable<typeof session>) => {
-    try {
-      const blob = await api.saveSession(targetSession.session_id);
-      const payload = await blob.text();
-      await upsertRecentSession({
-        serverSessionId: targetSession.session_id,
-        name: targetSession.filename,
-        payload,
-        nRows: targetSession.rows,
-        nCols: targetSession.columns.length,
-        activeTab,
-        source: "auto",
-      });
-      cloudSync.markDirty();
-    } catch (e) {
-      console.warn("[useAutoSession] snapshot failed", e);
-    }
-  };
-
-  const flushNow = () => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-    if (session) {
-      pendingRef.current = snapshot(session).finally(() => {
-        pendingRef.current = null;
-      });
-    }
-  };
-
-  // Debounced snapshot on session change.
   useEffect(() => {
-    if (!session) return;
+    if (!sessionId) return;
 
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
+    let cancelled = false;
 
-    timerRef.current = setTimeout(() => {
-      timerRef.current = null;
-      pendingRef.current = snapshot(session).finally(() => {
-        pendingRef.current = null;
-      });
-    }, 500);
-
-    return () => {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-        timerRef.current = null;
-        // Flush immediately rather than dropping the pending snapshot.
-        pendingRef.current = snapshot(session).finally(() => {
-          pendingRef.current = null;
+    const snapshot = async () => {
+      if (inFlightRef.current) return;
+      inFlightRef.current = true;
+      try {
+        const blob = await api.saveSession(sessionId);
+        if (cancelled) return;
+        const payload = await blob.text();
+        const hash = djb2(`${sessionId}\n${filename ?? ""}\n${activeTab}\n${payload}`);
+        if (hash === lastSavedHashRef.current) return;
+        lastSavedHashRef.current = hash;
+        await upsertRecentSession({
+          serverSessionId: sessionId,
+          name: filename ?? "Oturum",
+          payload,
+          nRows: nRows ?? undefined,
+          nCols: nCols ?? undefined,
+          activeTab,
+          source: "auto",
         });
+        cloudSync.markDirty();
+        await refreshRecentSessions();
+      } catch (e) {
+        console.warn("[useAutoSession] snapshot failed", e);
+      } finally {
+        inFlightRef.current = false;
       }
     };
-  }, [session, activeTab]);
 
-  // Flush pending snapshots before the page unloads.
-  useEffect(() => {
+    const debounceTimer = setTimeout(snapshot, DEBOUNCE_MS);
+    const interval = setInterval(snapshot, PERIODIC_MS);
     const onBeforeUnload = () => {
-      flushNow();
+      void snapshot();
     };
     window.addEventListener("beforeunload", onBeforeUnload);
+
     return () => {
+      cancelled = true;
+      clearTimeout(debounceTimer);
+      clearInterval(interval);
       window.removeEventListener("beforeunload", onBeforeUnload);
     };
-  }, [session]);
-
-  // Best-effort wait for any in-flight snapshot on unmount.
-  useEffect(() => {
-    return () => {
-      flushNow();
-      if (pendingRef.current) {
-        void pendingRef.current.catch(() => {});
-      }
-    };
-  }, []);
+  }, [sessionId, filename, nRows, nCols, activeTab, filters, dataVersion, refreshRecentSessions]);
 }
 
 export default useAutoSession;

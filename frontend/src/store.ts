@@ -16,8 +16,10 @@ interface AppState {
   redoDepth: number
   trashCounts: { rows: number; columns: number }
   filters: Record<string, string>
+  dataVersion: number
   setSession: (s: Session | null) => void
   setFilters: (f: Record<string, string>) => void
+  bumpDataVersion: () => void
   setActiveTab: (t: TabName) => void
   setSummary: (s: SummaryData | null) => void
   setZReport: (z: { granularity: string; rows: ZReportRow[] } | null) => void
@@ -47,6 +49,7 @@ export const useStore = create<AppState>((set, get) => ({
   redoDepth: 0,
   trashCounts: { rows: 0, columns: 0 },
   filters: {},
+  dataVersion: 0,
   setSession: (s) => {
     // Preserve the current active tab in a local variable. We do not autosave
     // here; useAutoSession handles snapshotting after a debounce.
@@ -61,6 +64,7 @@ export const useStore = create<AppState>((set, get) => ({
       redoDepth: 0,
       trashCounts: { rows: 0, columns: 0 },
       filters: {},
+      dataVersion: 0,
     })
     void currentTab
   },
@@ -85,7 +89,7 @@ export const useStore = create<AppState>((set, get) => ({
     }
     const file = new File([rec.payload], rec.name, { type: 'application/json' })
     const session = await api.loadSession(file)
-    set({ session, error: null })
+    set({ session, error: null, dataVersion: 0 })
     if (rec.activeTab) {
       const tab = rec.activeTab as TabName
       const validTabs: TabName[] = ['data', 'summary', 'zreport', 'visuals', 'sessions']
@@ -96,24 +100,31 @@ export const useStore = create<AppState>((set, get) => ({
   },
   setLoading: (v) => set({ isLoading: v }),
   setError: (e) => set({ error: e }),
+  bumpDataVersion: () => set((state) => ({ dataVersion: state.dataVersion + 1 })),
   updatePreviewCell: (rowIdx, col, value) =>
     set((state) => {
       if (!state.session) return state
       const preview = [...state.session.preview]
       preview[rowIdx] = { ...preview[rowIdx], [col]: value }
-      return { session: { ...state.session, preview } }
+      return { session: { ...state.session, preview }, dataVersion: state.dataVersion + 1 }
     }),
   removePreviewRow: (rowIdx) =>
     set((state) => {
       if (!state.session) return state
       const preview = state.session.preview.filter((_, i) => i !== rowIdx)
-      return { session: { ...state.session, rows: state.session.rows - 1, preview } }
+      return {
+        session: { ...state.session, rows: state.session.rows - 1, preview },
+        dataVersion: state.dataVersion + 1,
+      }
     }),
   addPreviewRow: (row) =>
     set((state) => {
       if (!state.session) return state
       const preview = [...state.session.preview, row]
-      return { session: { ...state.session, rows: state.session.rows + 1, preview } }
+      return {
+        session: { ...state.session, rows: state.session.rows + 1, preview },
+        dataVersion: state.dataVersion + 1,
+      }
     }),
   addColumn: (name, defaultValue) =>
     set((state) => {
@@ -121,7 +132,7 @@ export const useStore = create<AppState>((set, get) => ({
       if (state.session.columns.some((c) => c.name === name)) return state
       const columns = [...state.session.columns, { name, dtype: 'object', kind: 'text' as const }]
       const preview = state.session.preview.map((row) => ({ ...row, [name]: defaultValue ?? null }))
-      return { session: { ...state.session, columns, preview } }
+      return { session: { ...state.session, columns, preview }, dataVersion: state.dataVersion + 1 }
     }),
   updateSessionData: (payload) =>
     set((state) => {
@@ -136,6 +147,7 @@ export const useStore = create<AppState>((set, get) => ({
         undoDepth: payload.undo_depth,
         redoDepth: payload.redo_depth,
         trashCounts: payload.trash_counts,
+        dataVersion: state.dataVersion + 1,
       }
     }),
   setFilters: (f) => set({ filters: f }),

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../store'
 import {
   addColumn,
@@ -202,6 +202,8 @@ export default function DataTable() {
 
   const menuRef = useRef<HTMLDivElement>(null)
   const rowMenuRef = useRef<HTMLDivElement>(null)
+  const tableWrapRef = useRef<HTMLDivElement>(null)
+  const [rowMinHeight, setRowMinHeight] = useState<number | undefined>()
 
   useEffect(() => {
     setPage(0)
@@ -311,12 +313,39 @@ export default function DataTable() {
     }
   }, [selectedCell, editing])
 
-  if (!session || session.columns.length === 0) {
-    return null
-  }
+  const totalRows = filteredRows.length
+  const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE))
+  const safePage = Math.min(page, totalPages - 1)
+  const start = safePage * PAGE_SIZE
+  const visibleRows = filteredRows.slice(start, start + PAGE_SIZE)
+
+  const recalcRowHeight = useCallback(() => {
+    if (!tableWrapRef.current || visibleRows.length === 0) {
+      setRowMinHeight(undefined)
+      return
+    }
+    const wrap = tableWrapRef.current
+    const thead = wrap.querySelector('thead')
+    const headerHeight = thead?.clientHeight ?? 0
+    const available = wrap.clientHeight - headerHeight
+    if (available > 0) {
+      setRowMinHeight(Math.max(40, Math.floor(available / visibleRows.length)))
+    } else {
+      setRowMinHeight(undefined)
+    }
+  }, [visibleRows.length])
+
+  useLayoutEffect(() => {
+    recalcRowHeight()
+  }, [recalcRowHeight])
+
+  useEffect(() => {
+    window.addEventListener('resize', recalcRowHeight)
+    return () => window.removeEventListener('resize', recalcRowHeight)
+  }, [recalcRowHeight])
 
   const konuSuggestions = useMemo(() => {
-    if (!session.columns.some((c) => c.name === 'konu')) return []
+    if (!session || !session.columns.some((c) => c.name === 'konu')) return []
     const values = new Set<string>()
     session.preview.forEach((row) => {
       const raw = row['konu']
@@ -325,13 +354,11 @@ export default function DataTable() {
       if (s) values.add(s)
     })
     return Array.from(values).sort((a, b) => a.localeCompare(b, 'tr'))
-  }, [session.preview, session.columns])
+  }, [session])
 
-  const totalRows = filteredRows.length
-  const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE))
-  const safePage = Math.min(page, totalPages - 1)
-  const start = safePage * PAGE_SIZE
-  const visibleRows = filteredRows.slice(start, start + PAGE_SIZE)
+  if (!session || session.columns.length === 0) {
+    return null
+  }
 
   const commitEdit = async () => {
     if (!editing || !session) return
@@ -774,7 +801,7 @@ export default function DataTable() {
   }
 
   return (
-    <div className="flex h-full flex-col gap-3 bg-white p-4">
+    <div className="flex flex-1 flex-col gap-3 bg-white p-4">
       <div className="flex shrink-0 items-center justify-between">
         <div className="flex items-center gap-2">
           <button
@@ -889,7 +916,7 @@ export default function DataTable() {
         </span>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto rounded border border-slate-200 shadow-sm">
+      <div ref={tableWrapRef} className="min-h-0 flex-1 overflow-auto rounded border border-slate-200 shadow-sm">
         <table className="min-w-full text-left text-sm">
           <thead className="sticky top-0 z-10 bg-slate-100 text-xs uppercase text-slate-600">
             <tr>
@@ -948,6 +975,7 @@ export default function DataTable() {
                 <tr
                   key={rowIdx}
                   className="hover:bg-slate-50"
+                  style={rowMinHeight ? { height: rowMinHeight } : undefined}
                   onContextMenu={(e) => {
                     e.preventDefault()
                     setRowMenu({ rowIdx, x: e.clientX, y: e.clientY })
