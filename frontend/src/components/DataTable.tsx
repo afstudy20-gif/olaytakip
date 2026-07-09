@@ -761,8 +761,8 @@ export default function DataTable() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="flex h-full flex-col gap-3 bg-white p-4">
+      <div className="flex shrink-0 items-center justify-between">
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -876,7 +876,7 @@ export default function DataTable() {
         </span>
       </div>
 
-      <div className="overflow-x-auto rounded border border-slate-200 shadow-sm">
+      <div className="min-h-0 flex-1 overflow-auto rounded border border-slate-200 shadow-sm">
         <table className="min-w-full text-left text-sm">
           <thead className="sticky top-0 z-10 bg-slate-100 text-xs uppercase text-slate-600">
             <tr>
@@ -974,7 +974,7 @@ export default function DataTable() {
       </div>
 
       {totalRows > PAGE_SIZE && (
-        <div className="flex items-center justify-between text-sm text-slate-600">
+        <div className="flex shrink-0 items-center justify-between text-sm text-slate-600">
           <span>
             {start + 1}-{Math.min(start + PAGE_SIZE, totalRows)} / {totalRows} satır
           </span>

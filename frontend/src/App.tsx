@@ -73,15 +73,20 @@ function App() {
           ))}
         </div>
       </nav>
-      <main className="flex-1 p-6">
-        {error && <p className="text-red-600 mb-4">{error}</p>}
-        <div className="bg-white rounded-lg border border-slate-200 p-6">
-          {activeTab === 'data' && <DataTable />}
-          {activeTab === 'summary' && <OlaySummaryPanel />}
-          {activeTab === 'zreport' && <ZReportPanel />}
-          {activeTab === 'visuals' && <OlayChartsPanel />}
-          {activeTab === 'sessions' && <SessionsPanel />}
-        </div>
+      <main className="flex-1 overflow-hidden">
+        {error && <p className="p-6 text-red-600">{error}</p>}
+        {activeTab === 'data' ? (
+          <DataTable />
+        ) : (
+          <div className="h-full overflow-auto p-6">
+            <div className="rounded-lg border border-slate-200 bg-white p-6">
+              {activeTab === 'summary' && <OlaySummaryPanel />}
+              {activeTab === 'zreport' && <ZReportPanel />}
+              {activeTab === 'visuals' && <OlayChartsPanel />}
+              {activeTab === 'sessions' && <SessionsPanel />}
+            </div>
+          </div>
+        )}
       </main>
     </div>
   )
