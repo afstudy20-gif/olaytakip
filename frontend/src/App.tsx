@@ -10,7 +10,7 @@ import CloudSyncBar from './components/CloudSyncBar'
 
 const TABS: { key: import('./types').TabName; label: string }[] = [
   { key: 'data', label: 'Data' },
-  { key: 'summary', label: 'Summary' },
+  { key: 'summary', label: 'Özet' },
   { key: 'zreport', label: 'Z Raporu' },
   { key: 'visuals', label: 'Görsel Özet' },
   { key: 'sessions', label: 'Oturumlar' },
