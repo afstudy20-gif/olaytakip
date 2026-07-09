@@ -152,12 +152,8 @@ export function exportZReportUrl(
   return `/api/analiz/zreport/export?session_id=${sessionId}&granularity=${granularity}&${params.toString()}`
 }
 
-export function saveSessionUrl(sessionId: string) {
-  return `/api/sessions/${sessionId}/save_session`
-}
-
 export async function saveSession(sessionId: string): Promise<Blob> {
-  const res = await api.get(saveSessionUrl(sessionId), { responseType: "blob" })
+  const res = await api.get(`/sessions/${sessionId}/save_session`, { responseType: "blob" })
   return res.data
 }
 
