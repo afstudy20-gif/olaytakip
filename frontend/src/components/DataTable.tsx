@@ -7,7 +7,10 @@ import {
   deleteRow,
   duplicateColumn,
   duplicateRow,
+  exportDatasetJsonUrl,
+  exportDatasetUrl,
   insertColumn,
+  loadSession,
   renameColumn,
   reorderColumns,
   undo,
@@ -17,8 +20,9 @@ import {
   restoreTrashColumn,
   emptyTrash,
   updateCell,
+  uploadFile,
 } from '../api'
-import { Plus, Table2, MoreHorizontal, ChevronLeft, ChevronRight, Copy, Trash2, Edit3, Filter, Undo2, Redo2, RotateCcw, ArrowUpDown, ArrowUp, ArrowDown, GripVertical } from 'lucide-react'
+import { Plus, Table2, MoreHorizontal, ChevronLeft, ChevronRight, Copy, Trash2, Edit3, Filter, Undo2, Redo2, RotateCcw, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, Download, Upload } from 'lucide-react'
 import LocationEditor, { isLocationColumn } from './LocationEditor'
 import { TURKIYE_ILLER, YURTDISI_LABEL } from '../lib/turkiye_il_ilce'
 import { getDefaultIl, setDefaultIl as saveDefaultIl } from '../lib/defaultIl'
@@ -199,10 +203,14 @@ export default function DataTable() {
   const [selectedCell, setSelectedCell] = useState<{ rowIdx: number; colName: string } | null>(null)
   const selectedRef = useRef<HTMLTableCellElement | null>(null)
   const [rowMenu, setRowMenu] = useState<{ rowIdx: number; x: number; y: number } | null>(null)
+  const [exportOpen, setExportOpen] = useState(false)
+  const [importing, setImporting] = useState(false)
 
   const menuRef = useRef<HTMLDivElement>(null)
   const rowMenuRef = useRef<HTMLDivElement>(null)
   const tableWrapRef = useRef<HTMLDivElement>(null)
+  const exportMenuRef = useRef<HTMLDivElement>(null)
+  const importInputRef = useRef<HTMLInputElement>(null)
   const [rowMinHeight, setRowMinHeight] = useState<number | undefined>()
 
   useEffect(() => {
@@ -217,12 +225,15 @@ export default function DataTable() {
       if (rowMenuRef.current && !rowMenuRef.current.contains(e.target as Node)) {
         setRowMenu(null)
       }
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setExportOpen(false)
+      }
     }
-    if (menuCol || rowMenu) {
+    if (menuCol || rowMenu || exportOpen) {
       document.addEventListener('mousedown', handleClickOutside)
       return () => document.removeEventListener('mousedown', handleClickOutside)
     }
-  }, [menuCol, rowMenu])
+  }, [menuCol, rowMenu, exportOpen])
 
   const filteredRows = useMemo(() => {
     if (!session || session.columns.length === 0) return []
@@ -681,6 +692,26 @@ export default function DataTable() {
     }
   }
 
+  const handleImportFile = async (file: File) => {
+    if (!window.confirm(`"${file.name}" dosyası mevcut oturumun yerini alacak. Devam edilsin mi?`)) {
+      return
+    }
+    setImporting(true)
+    setError(null)
+    try {
+      const isJson = file.name.toLowerCase().endsWith('.json')
+      const newSession = isJson ? await loadSession(file) : await uploadFile(file)
+      useStore.getState().setSession(newSession)
+      await useStore.getState().refreshRecentSessions()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Dosya içe aktarılamadı'
+      setError(message)
+      console.error('Import failed:', err)
+    } finally {
+      setImporting(false)
+    }
+  }
+
   const renderCell = (row: Record<string, unknown>, rowIdx: number, col: { name: string; kind: string }) => {
     const isEditing = editing?.rowIdx === rowIdx && editing?.col === col.name
     const cellValue = row[col.name]
@@ -910,6 +941,65 @@ export default function DataTable() {
               </span>
             )}
           </button>
+
+          <div className="h-6 w-px bg-slate-300" />
+
+          <div className="relative" ref={exportMenuRef}>
+            <button
+              type="button"
+              onClick={() => setExportOpen((v) => !v)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              <Download size={16} />
+              Dışa Aktar
+            </button>
+            {exportOpen && (
+              <div className="absolute left-0 top-full z-30 mt-1 w-40 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                <a
+                  href={exportDatasetUrl(session.session_id, 'csv', session.filename)}
+                  onClick={() => setExportOpen(false)}
+                  className="block px-3 py-1.5 text-left text-sm hover:bg-slate-100"
+                >
+                  CSV
+                </a>
+                <a
+                  href={exportDatasetUrl(session.session_id, 'xlsx', session.filename)}
+                  onClick={() => setExportOpen(false)}
+                  className="block px-3 py-1.5 text-left text-sm hover:bg-slate-100"
+                >
+                  Excel (.xlsx)
+                </a>
+                <a
+                  href={exportDatasetJsonUrl(session.session_id)}
+                  onClick={() => setExportOpen(false)}
+                  className="block px-3 py-1.5 text-left text-sm hover:bg-slate-100"
+                >
+                  JSON
+                </a>
+              </div>
+            )}
+          </div>
+
+          <button
+            type="button"
+            disabled={importing}
+            onClick={() => importInputRef.current?.click()}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Upload size={16} />
+            {importing ? 'Yükleniyor...' : 'İçe Aktar'}
+          </button>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".csv,.xlsx,.xls,.json"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              e.target.value = ''
+              if (file) void handleImportFile(file)
+            }}
+          />
         </div>
         <span className="text-sm text-slate-500">
           {totalRows} satır · {session?.columns.length ?? 0} sütun

@@ -130,6 +130,10 @@ export function exportDatasetUrl(sessionId: string, fmt: 'csv' | 'xlsx', filenam
   return `/api/sessions/${sessionId}/export?fmt=${fmt}&filename=${encodeURIComponent(filename)}`
 }
 
+export function exportDatasetJsonUrl(sessionId: string) {
+  return `/api/sessions/${sessionId}/save_session`
+}
+
 export function exportZReportUrl(
   sessionId: string,
   granularity: string,
