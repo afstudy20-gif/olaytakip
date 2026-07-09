@@ -79,6 +79,31 @@ def test_summary_with_filters():
     assert data["total_records"] == 2
 
 
+def test_zreport_detail():
+    sid = _upload_sample()
+    r = client.get(f"/api/analiz/zreport/detail?session_id={sid}&granularity=monthly")
+    assert r.status_code == 200
+    data = r.json()
+    rows = data["rows"]
+    assert len(rows) == 4
+    ali_rows = [row for row in rows if str(row.get("tc")) == "12345678901"]
+    assert len(ali_rows) == 2
+    assert ali_rows[0]["giris_no"] == 1
+    assert ali_rows[1]["giris_no"] == 2
+    assert ali_rows[1]["onceki_gelis_tarihleri"] == "2024-01-01"
+
+
+def test_zreport_detail_export():
+    sid = _upload_sample()
+    r = client.get(
+        f"/api/analiz/zreport/export?session_id={sid}&granularity=monthly&detail=1&fmt=csv&columns=tc,giris_no,onceki_gelis_tarihleri"
+    )
+    assert r.status_code == 200
+    content = r.content.decode("utf-8-sig")
+    assert "tc,giris_no,onceki_gelis_tarihleri" in content
+    assert "12345678901" in content
+
+
 def test_charts_with_filters():
     sid = _upload_sample()
     filters = json.dumps({"konu": "Başvuru"})

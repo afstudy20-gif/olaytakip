@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from services import store
 from services.olay_analiz import compute_summary
-from services.z_raporu import compute_z_report
+from services.z_raporu import compute_z_report, compute_z_report_detail
 from services.plot_data import compute_all_charts
 
 router = APIRouter()
@@ -67,6 +67,19 @@ async def zreport(
     return {"granularity": granularity, "rows": compute_z_report(df, granularity=granularity)}
 
 
+@router.get("/zreport/detail")
+async def zreport_detail(
+    session_id: str = Query(...),
+    granularity: Literal["daily", "weekly", "monthly", "quarterly", "half_yearly", "yearly"] = Query("monthly"),
+    filters: Optional[str] = Query(None),
+):
+    df = store.get(session_id)
+    if df is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    df = _apply_filters(df, filters)
+    return {"granularity": granularity, "rows": compute_z_report_detail(df, granularity=granularity)}
+
+
 @router.get("/zreport/export")
 async def zreport_export(
     session_id: str = Query(...),
@@ -74,12 +87,17 @@ async def zreport_export(
     filters: Optional[str] = Query(None),
     fmt: str = Query("xlsx", pattern="^(csv|xlsx)$"),
     columns: Optional[str] = Query(None),
+    detail: bool = Query(False),
 ):
     df = store.get(session_id)
     if df is None:
         raise HTTPException(status_code=404, detail="Session not found")
     df = _apply_filters(df, filters)
-    rows = compute_z_report(df, granularity=granularity)
+    rows = (
+        compute_z_report_detail(df, granularity=granularity)
+        if detail
+        else compute_z_report(df, granularity=granularity)
+    )
     if not rows:
         raise HTTPException(status_code=404, detail="No Z report data to export")
     out_df = pd.DataFrame(rows)
@@ -87,7 +105,7 @@ async def zreport_export(
         selected = [c.strip() for c in columns.split(",") if c.strip() in out_df.columns]
         if selected:
             out_df = out_df[selected]
-    base = f"zreport_{granularity}"
+    base = f"zreport_{'detail_' if detail else ''}{granularity}"
     if fmt == "csv":
         buf = io.StringIO()
         out_df.to_csv(buf, index=False)

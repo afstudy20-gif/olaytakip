@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { Session, SessionData, TrashData, SummaryData, ZReportRow, ChartsData } from './types'
+import type { Session, SessionData, TrashData, SummaryData, ZReportRow, ZReportDetailRow, ChartsData } from './types'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
 
@@ -104,6 +104,19 @@ export async function fetchZReport(
   return res.data
 }
 
+export async function fetchZReportDetail(
+  sessionId: string,
+  granularity: ZGranularity = 'monthly',
+  filters?: Record<string, string>
+): Promise<{ granularity: string; rows: ZReportDetailRow[] }> {
+  const params: Record<string, unknown> = { session_id: sessionId, granularity }
+  if (filters && Object.keys(filters).length > 0) {
+    params.filters = JSON.stringify(filters)
+  }
+  const res = await api.get('/analiz/zreport/detail', { params })
+  return res.data
+}
+
 export async function fetchCharts(sessionId: string, filters?: Record<string, string>): Promise<ChartsData> {
   const params: Record<string, unknown> = { session_id: sessionId }
   if (filters && Object.keys(filters).length > 0) {
@@ -122,10 +135,14 @@ export function exportZReportUrl(
   granularity: string,
   fmt: 'csv' | 'xlsx',
   columns: string[],
-  filters?: Record<string, string>
+  filters?: Record<string, string>,
+  detail = false
 ) {
   const params = new URLSearchParams()
   params.set('fmt', fmt)
+  if (detail) {
+    params.set('detail', '1')
+  }
   if (columns.length > 0) {
     params.set('columns', columns.join(','))
   }

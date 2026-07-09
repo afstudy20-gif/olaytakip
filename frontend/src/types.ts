@@ -108,6 +108,21 @@ export interface ZReportRow {
   repeated_visits: number;
 }
 
+export interface ZReportDetailRow {
+  period: string;
+  tc?: string | null;
+  adi?: string | null;
+  soyadi?: string | null;
+  gelis_tarihi: string;
+  konu?: string | null;
+  olay_ozeti?: string | null;
+  giris_no: number;
+  toplam_giris: number;
+  onceki_gelis_tarihleri?: string | null;
+  onceki_konular?: string | null;
+  onceki_olay_ozetleri?: string | null;
+}
+
 export interface ChartData {
   type: string;
   title: string;
