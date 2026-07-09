@@ -198,8 +198,10 @@ export default function DataTable() {
   const [dragOver, setDragOver] = useState<{ col: string; side: 'before' | 'after' } | null>(null)
   const [selectedCell, setSelectedCell] = useState<{ rowIdx: number; colName: string } | null>(null)
   const selectedRef = useRef<HTMLTableCellElement | null>(null)
+  const [rowMenu, setRowMenu] = useState<{ rowIdx: number; x: number; y: number } | null>(null)
 
   const menuRef = useRef<HTMLDivElement>(null)
+  const rowMenuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     setPage(0)
@@ -210,12 +212,15 @@ export default function DataTable() {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setMenuCol(null)
       }
+      if (rowMenuRef.current && !rowMenuRef.current.contains(e.target as Node)) {
+        setRowMenu(null)
+      }
     }
-    if (menuCol) {
+    if (menuCol || rowMenu) {
       document.addEventListener('mousedown', handleClickOutside)
       return () => document.removeEventListener('mousedown', handleClickOutside)
     }
-  }, [menuCol])
+  }, [menuCol, rowMenu])
 
   const filteredRows = useMemo(() => {
     if (!session || session.columns.length === 0) return []
@@ -409,27 +414,35 @@ export default function DataTable() {
         rowData['ikamet_il'] = defaultIl
       }
       const res = await addRow(session.session_id, rowData)
-      useStore.getState().updateSessionData(res)
+      refreshSession(res)
       const newTotalRows = res.preview.length
       setPage(Math.max(0, Math.ceil(newTotalRows / PAGE_SIZE) - 1))
     } catch (err) {
+      const message = err instanceof Error ? err.message : 'Satır eklenemedi'
+      setError(message)
       console.error('Row add failed:', err)
     }
   }
 
   const handleAddColumn = async () => {
-    if (!session || !newColumnName.trim()) return
+    if (!session) return
     const name = newColumnName.trim()
+    if (!name) {
+      setAddingColumn(false)
+      return
+    }
     if (session.columns.some((c) => c.name === name)) {
       setError('Bu sütun adı zaten var')
       return
     }
     try {
       const res = await addColumn(session.session_id, name)
-      useStore.getState().updateSessionData(res)
+      refreshSession(res)
       setNewColumnName('')
       setAddingColumn(false)
     } catch (err) {
+      const message = err instanceof Error ? err.message : 'Sütun eklenemedi'
+      setError(message)
       console.error('Column add failed:', err)
     }
   }
@@ -887,6 +900,10 @@ export default function DataTable() {
                   <th
                     key={col.name}
                     draggable
+                    onContextMenu={(e) => {
+                      e.preventDefault()
+                      openMenu(e, col.name)
+                    }}
                     onDragStart={(e) => {
                       setDragCol(col.name)
                       e.dataTransfer.setData('text/plain', col.name)
@@ -928,7 +945,14 @@ export default function DataTable() {
             {visibleRows.map((row) => {
               const rowIdx = session.preview.findIndex((r) => r === row)
               return (
-                <tr key={rowIdx} className="hover:bg-slate-50">
+                <tr
+                  key={rowIdx}
+                  className="hover:bg-slate-50"
+                  onContextMenu={(e) => {
+                    e.preventDefault()
+                    setRowMenu({ rowIdx, x: e.clientX, y: e.clientY })
+                  }}
+                >
                   {session.columns.map((col) => {
                     const isSelected = selectedCell?.rowIdx === rowIdx && selectedCell?.colName === col.name && !editing
                     return (
@@ -1072,6 +1096,34 @@ export default function DataTable() {
               </ul>
             </div>
           )}
+        </div>
+      )}
+
+      {rowMenu && (
+        <div
+          ref={rowMenuRef}
+          style={{ top: rowMenu.y, left: rowMenu.x }}
+          className="fixed z-50 w-48 rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-slate-100"
+            onClick={() => {
+              handleDuplicateRow(rowMenu.rowIdx)
+              setRowMenu(null)
+            }}
+          >
+            <Copy size={14} /> Satırı kopyala
+          </button>
+          <button
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-red-600 hover:bg-red-50"
+            onClick={() => {
+              handleDelete(rowMenu.rowIdx)
+              setRowMenu(null)
+            }}
+          >
+            <Trash2 size={14} /> Satırı sil
+          </button>
         </div>
       )}
 
